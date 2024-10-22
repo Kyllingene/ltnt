@@ -1,0 +1,358 @@
+/// ```rust
+/// # use ltnt::ltnt;
+/// ltnt!(
+///     // A set of commands that, when used itself as a command, accepts the arguments of 'Root'
+///     pub enum Manager in ManagerArgs {
+///         // Basic command named 'help', takes no arguments, can be a full path;
+///         // if no command is passed, this is the default
+///         ~Help,
+///
+///         // Nested command called with 'ls'
+///         Ls = Ls,
+///
+///         // Nested command called with `dev` (*not* `info`)
+///         Info = Ls as "dev",
+///     };
+///
+///     // A set of arguments being used as the arguments for 'Manager' (but can be used anywhere)
+///     pub struct ManagerArgs {
+///         // A required argument with a short form
+///         pub name('n'): String,
+///
+///         // An argument with a default value, that therefore doesn't need to be passed
+///         pub verbose: bool = false,
+///     };
+///
+///     // A set of arguments that's being used in 'Manager' as a command
+///     struct Ls {
+///         pub all('a'): bool = false,
+///
+///         // An optional argument (is really `Option<String>`, defaults to `None`)
+///         pub filter('f') ?: String,
+///     };
+///
+///     #[derive(Debug)]
+///     pub struct Info {
+///         // An optional argument set with `--kinds`
+///         pub device_kinds as "kinds" ?: Vec<String>,
+///     };
+/// );
+/// ```
+///
+/// Example usages for above code, assuming `Manager` is the root and the binary
+/// is called `manager`:
+///
+/// ```sh
+/// manager help
+///
+/// # When supplying values, long-form arguments can optionally use an '=',
+/// # while short-form ones cannot
+/// manager ls --filter="foo"
+/// manager ls -f "bar"
+///
+/// # Arguments come exclusively after the command they modify, i.e.
+/// # `manager dev --verbose` is invalid
+/// manager --verbose dev --kinds keyboard,monitor
+/// ```
+#[macro_export]
+macro_rules! ltnt {
+    ($(
+        $(#[$attr:meta])*
+        $( pub $(( $($vis_args:tt)* ))? )?
+
+        $(
+            enum $cmds:ident $( in $cmds_args:ident $( :: $cmds_args_path:ident )* )? {$(
+                $(#[$cmd_attr:meta])*
+                $( ~ $(@ $cmd_default:tt )? )?
+                $cmd:ident
+                    $( = $( :: $(@ $cmd_abs_path:tt )? )? $cmd_inner:ident $( :: $cmd_path:ident )* )?
+                    $( as $cmd_rename:literal )?
+            ),* $(,)?}
+        )?
+
+        $(
+            struct $args:ident $( in $args_args:ident $( :: $args_args_path:ident )* )? {$(
+                $(#[$arg_attr:meta])*
+                $arg_vis:vis $arg:ident
+                    $(( $arg_short:literal ))?
+                    $( as $arg_rename:literal )?
+                    $( ? $(@ $arg_optional:tt )? )?
+                    : $arg_ty:ty
+                    $( = $arg_default:expr )?
+            ),* $(,)?}
+        )?
+    ;)+) => {$(
+        $(#[$attr])*
+        $( pub $(( $($vis_args)* ))? )?
+
+        $(
+            enum $cmds {$(
+                $(#[$cmd_attr])*
+                $cmd
+                    $(( $( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )* ))?
+            ),*}
+
+            impl $crate::Parsable for $cmds {
+                // TODO: make this just `Self` when no arguments
+                type Output = $crate::__if_else!(
+                    if { $(( Self, $cmds_args $( :: $cmds_args_path )* ))? }
+                    else { (Self, ()) }
+                );
+
+                type FullOutput<T> = (
+                    Self,
+                    $( $cmds_args $( :: $cmds_args_path )*, )?
+                    T,
+                );
+
+                fn make_full_output<T>(output: Self::Output, rest: T) -> Self::FullOutput<T> {
+                    $crate::__if_else!(
+                        if ($( $cmds_args )?) {
+                            (output.0, output.1, rest)
+                        } else {
+                            (output, rest)
+                        }
+                    )
+                }
+
+                fn parse_from<S>(stream: &mut $crate::Peekable<S>)
+                    -> $crate::Result<<Self as $crate::Parsable>::Output>
+                where
+                    S: ::core::iter::Iterator,
+                    S::Item: ::core::convert::AsRef<::core::primitive::str>
+                        + ::core::convert::Into<::std::string::String>,
+                {
+                    let args = <$crate::__if_else!(
+                        if { $( $cmds_args $( :: $cmds_args_path )* )? }
+                        else { () }
+                    ) as $crate::Parsable>::parse_from(stream)?;
+
+                    let cmd = stream.peek().ok_or($crate::Error::OutOfData);
+                    $($crate::__if_else!(if ($(~ $($cmd_default)?)?) {
+                        if cmd.is_err() {
+                            $crate::__if_else!(
+                                if {$(
+                                    let cmd = <$( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )*
+                                            as $crate::Parsable>::parse_from(stream)?;
+                                    return ::core::result::Result::Ok((Self::$cmd(cmd), args));
+                                )?}
+                                else { return ::core::result::Result::Ok((Self::$cmd, args)); }
+                            );
+                        }
+                    });)*
+
+                    cmd?;
+                    let cmd = stream.next().unwrap();
+                    let cmd = cmd.as_ref();
+
+                    $(
+                        let target = $crate::__if_else!(if {
+                            $( $cmd_rename )?
+                        } else { $crate::__kebab!($cmd) });
+                        if cmd == target {
+                            $crate::__if_else!(
+                                if {$(
+                                    let cmd = <
+                                        $( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )*
+                                            as $crate::Parsable
+                                        >::parse_from(stream)?;
+                                    return ::core::result::Result::Ok((Self::$cmd(cmd), args));
+                                )?} else { return ::core::result::Result::Ok((Self::$cmd, args)); }
+                            );
+                        }
+                    )*
+
+                    ::core::result::Result::Err(
+                        $crate::Error::UnrecognizedCommand(cmd.into())
+                    )
+                }
+            }
+        )?
+
+        $(
+            struct $args {$(
+                $(#[$arg_attr])*
+                $arg_vis $arg: $crate::__opt_ty!($( ? $($arg_optional)? )? $arg_ty)
+            ),*}
+
+            impl $crate::Parsable for $args {
+                type Output = Self;
+                type FullOutput<T> = (Self, T);
+
+                fn make_full_output<T>(output: Self::Output, rest: T) -> Self::FullOutput<T> {
+                    (output, rest)
+                }
+
+                fn parse_from<S>(stream: &mut $crate::Peekable<S>) -> $crate::Result<Self>
+                where
+                    S: ::core::iter::Iterator,
+                    S::Item: ::core::convert::AsRef<::core::primitive::str>
+                        + ::core::convert::Into<::std::string::String>,
+                {
+                    $(
+                        let mut $arg = ::core::option::Option::<$arg_ty>::None;
+                    )*
+
+                    while let ::core::option::Option::Some(arg)
+                        = stream.peek().map(|s| s.as_ref().trim())
+                    {
+                        if arg == "--" {
+                            break;
+                        } else if arg.starts_with("--") {
+                            let arg = stream.next().unwrap();
+                            let long = arg.as_ref().strip_prefix("--").unwrap();
+                            let (long, val) = long.split_once('=').unwrap_or((long, ""));
+                            $(
+                                let target = $crate::__if_else!(if {
+                                    $( $arg_rename )?
+                                } else { $crate::__kebab!($arg) });
+                                if long == target {
+                                    let default = <$arg_ty as $crate::Value>::default();
+                                    let val = if val.is_empty() && default.is_none() {
+                                        let val = stream.next().unwrap();
+                                        ::core::option::Option::Some(
+                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                        )
+                                    } else if !val.is_empty() {
+                                        ::core::option::Option::Some(
+                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                        )
+                                    } else if !default.is_none() {
+                                        default
+                                    } else {
+                                        let val = stream.next()
+                                            .ok_or_else(|| $crate::Error::MissingValue(long.to_string()))?;
+
+                                        ::core::option::Option::Some(
+                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                        )
+                                    }.ok_or_else(|| $crate::Error::MissingValue(long.to_string()))?;
+
+                                    $arg = ::core::option::Option::Some(val);
+
+                                    continue;
+                                }
+                            )*
+
+                            return ::core::result::Result::Err(
+                                $crate::Error::UnrecognizedArgument(long.to_string())
+                            );
+                        } else if arg.starts_with('-') {
+                            let arg = stream.next().unwrap();
+                            let short = arg.as_ref().strip_prefix('-').unwrap();
+
+
+                            let mut chars = short.chars();
+                            let last = chars.next_back().ok_or($crate::Error::EmptyShortList)?;
+
+                            for ch in chars {
+                                $($(
+                                    if ch == $arg_short {
+                                        // only the final arg in a short chain is allowed to
+                                        // consume a following value, the rest must rely on
+                                        // defaults
+                                        let val = <$arg_ty as $crate::Value>::default()
+                                            .ok_or_else(|| $crate::Error::MissingValue(ch.to_string()))?;
+
+                                        $arg = ::core::option::Option::Some(val);
+
+                                        continue;
+                                    }
+                                )?)*
+
+                                return ::core::result::Result::Err(
+                                    $crate::Error::UnrecognizedArgument(ch.to_string())
+                                );
+                            }
+
+                            $($(
+                                if last == $arg_short {
+                                    let val = <$arg_ty as $crate::Value>::default()
+                                        .ok_or_else(|| $crate::Error::MissingValue(last.to_string()))
+                                        .or_else(|e| {
+                                            let val = stream.next()
+                                                .ok_or(e)?;
+                                            
+                                            <$arg_ty as $crate::Value>::parse(val.as_ref())
+                                        })?;
+
+                                    $arg = ::core::option::Option::Some(val);
+
+                                    continue;
+                                }
+
+                            )?)*
+
+                            return ::core::result::Result::Err(
+                                $crate::Error::UnrecognizedArgument(last.to_string())
+                            );
+                        } else {
+                            break; // arguments in a set must be contiguous
+                        }
+                    }
+
+                    let mut missing = Vec::new();
+
+                    $(
+                        let $arg = $arg
+                            $( .or_else(|| ::core::option::Option::Some($arg_default)) )?;
+
+                        $crate::__if_else!(
+                            if ($( ? $($arg_optional)? )?) {}
+                            else {
+                                if $arg.is_none() {
+                                    let name = $crate::__if_else!(if {
+                                        $( $arg_rename )?
+                                    } else { $crate::__kebab!($arg) });
+                                    missing.push(name.to_string());
+                                }
+                            }
+                        );
+                    )*
+
+                    if !missing.is_empty() {
+                        return ::core::result::Result::Err($crate::Error::MissingArguments(missing));
+                    }
+
+                    ::core::result::Result::Ok(Self {$(
+                        $arg: $crate::__if_else!(
+                            if ($( ? $($arg_optional)? )?) {
+                                $arg
+                            } else {
+                                $arg.unwrap()
+                            }
+                        )
+                    ),*})
+                }
+            }
+        )?
+    )+};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __opt_ty {
+    ( ? $($t:tt)* ) => { ::core::option::Option<$($t)*> };
+    ( $($t:tt)* ) => { $($t)* };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __if_else {
+    (if () {$($_:tt)*} else {$($t:tt)*}) => {$($t)*};
+    (if ($($_:tt)*) {$($t:tt)*} else {$($__:tt)*}) => {$($t)*};
+
+    (if () {$($_:tt)*}) => {};
+    (if ($($_:tt)*) {$($t:tt)*}) => {$($t)*};
+
+    (if {} else {$($t:tt)*}) => {$($t)*};
+    (if {$($t:tt)*} else {$($_:tt)*}) => {$($t)*};
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __kebab {
+    ($s:ident) => {
+        $crate::__map_ascii_case!($crate::__Case::Kebab, stringify!($s))
+    };
+}
