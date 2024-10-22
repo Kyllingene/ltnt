@@ -268,10 +268,10 @@ macro_rules! ltnt {
                             $($(
                                 if last == $arg_short {
                                     let val = <$arg_ty as $crate::Value>::default()
-                                        .ok_or_else(|| $crate::Error::MissingValue(last.to_string()))
-                                        .or_else(|e| {
+                                        .map(::core::result::Result::Ok)
+                                        .unwrap_or_else(|| {
                                             let val = stream.next()
-                                                .ok_or(e)?;
+                                                .ok_or_else(|| $crate::Error::MissingValue(last.to_string()))?;
                                             
                                             <$arg_ty as $crate::Value>::parse(val.as_ref())
                                         })?;

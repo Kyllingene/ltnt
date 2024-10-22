@@ -93,17 +93,17 @@ fn main() {
                 }
 
                 if kinds.contains(&"mouse".into()) {
-                    let (device, description) = DEVICES[0];
+                    let (device, description) = DEVICES[1];
                     println!("{device} : {description}");
                 }
 
                 if kinds.contains(&"speaker".into()) || kinds.contains(&"headphones".into()) {
-                    let (device, description) = DEVICES[0];
+                    let (device, description) = DEVICES[2];
                     println!("{device} : {description}");
                 }
 
                 if kinds.contains(&"display".into()) || kinds.contains(&"monitor".into()) {
-                    let (device, description) = DEVICES[0];
+                    let (device, description) = DEVICES[3];
                     println!("{device} : {description}");
                 }
             } else {
