@@ -3,9 +3,9 @@ use ltnt::Parsable;
 ltnt::ltnt!(
     // A set of commands that, when used itself as a command, accepts the arguments of 'Root'
     pub enum Manager in ManagerArgs {
-        // Basic command named 'help', takes no arguments, can be a full path;
-        // if no command is passed, this is the default
-        ~Help,
+        // Basic command named 'help', can be a full path to the type. If no
+        // command is passed, this is the default
+        ~Help = Help,
 
         // Nested command called with 'ls'
         Ls = Ls,
@@ -24,6 +24,11 @@ ltnt::ltnt!(
     };
 
     // A set of arguments that's being used in 'Manager' as a command
+    struct Help {
+        pub courteous: bool,
+    };
+
+    // A set of arguments that's being used in 'Manager' as a command
     struct Ls {
         pub all('a'): bool = true,
 
@@ -33,8 +38,8 @@ ltnt::ltnt!(
 
     #[derive(Debug)]
     pub struct Info {
-        // An optional argument set with `--kinds`
-        pub device_kinds as "kinds" ?: Vec<String>,
+        // An optional argument set with `--type`
+        pub device_type as "type" ?: Vec<String>,
     };
 );
 
@@ -68,7 +73,13 @@ fn main() {
     }
 
     match cmd {
-        Manager::Help => println!("TODO: help message"),
+        Manager::Help(help) => {
+            if help.courteous {
+                println!("Please read the manual online.");
+            } else {
+                panic!("Read the docs, doofus.");
+            }
+        }
         Manager::Ls(ls) => {
             let list = if ls.all { DEVICES } else { &DEVICES[2..] };
 
@@ -86,23 +97,23 @@ fn main() {
         }
 
         Manager::Info(info) => {
-            if let Some(kinds) = info.device_kinds {
-                if kinds.contains(&"keyboard".into()) {
+            if let Some(types) = info.device_type {
+                if types.contains(&"keyboard".into()) {
                     let (device, description) = DEVICES[0];
                     println!("{device} : {description}");
                 }
 
-                if kinds.contains(&"mouse".into()) {
+                if types.contains(&"mouse".into()) {
                     let (device, description) = DEVICES[1];
                     println!("{device} : {description}");
                 }
 
-                if kinds.contains(&"speaker".into()) || kinds.contains(&"headphones".into()) {
+                if types.contains(&"speaker".into()) || types.contains(&"headphones".into()) {
                     let (device, description) = DEVICES[2];
                     println!("{device} : {description}");
                 }
 
-                if kinds.contains(&"display".into()) || kinds.contains(&"monitor".into()) {
+                if types.contains(&"display".into()) || types.contains(&"monitor".into()) {
                     let (device, description) = DEVICES[3];
                     println!("{device} : {description}");
                 }

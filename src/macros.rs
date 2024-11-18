@@ -61,11 +61,11 @@ macro_rules! ltnt {
         $( pub $(( $($vis_args:tt)* ))? )?
 
         $(
-            enum $cmds:ident $( in $cmds_args:ident $( :: $cmds_args_path:ident )* )? {$(
+            enum $cmds:ident $( in $cmds_args:ty )? {$(
                 $(#[$cmd_attr:meta])*
                 $( ~ $(@ $cmd_default:tt )? )?
                 $cmd:ident
-                    $( = $( :: $(@ $cmd_abs_path:tt )? )? $cmd_inner:ident $( :: $cmd_path:ident )* )?
+                    $( = $cmd_inner:ty )?
                     $( as $cmd_rename:literal )?
             ),* $(,)?}
         )?
@@ -88,20 +88,18 @@ macro_rules! ltnt {
         $(
             enum $cmds {$(
                 $(#[$cmd_attr])*
-                $cmd
-                    $(( $( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )* ))?
+                $cmd $(( $cmd_inner ))?
             ),*}
 
             impl $crate::Parsable for $cmds {
-                // TODO: make this just `Self` when no arguments
                 type Output = $crate::__if_else!(
-                    if { $(( Self, $cmds_args $( :: $cmds_args_path )* ))? }
-                    else { (Self, ()) }
+                    if { $(( Self, $cmds_args ))? }
+                    else { Self }
                 );
 
                 type FullOutput<T> = (
                     Self,
-                    $( $cmds_args $( :: $cmds_args_path )*, )?
+                    $( $cmds_args, )?
                     T,
                 );
 
@@ -122,49 +120,62 @@ macro_rules! ltnt {
                     S::Item: ::core::convert::AsRef<::core::primitive::str>
                         + ::core::convert::Into<::std::string::String>,
                 {
-                    let args = <$crate::__if_else!(
-                        if { $( $cmds_args $( :: $cmds_args_path )* )? }
-                        else { () }
-                    ) as $crate::Parsable>::parse_from(stream)?;
+                    let ret = $crate::__if_else!(
+                        if {$({
+                            let args = <$cmds_args as $crate::Parsable>::parse_from(stream)?;
+                            move |x: Self| ::core::result::Result::Ok((x, args))
+                        })?} else {
+                            |x: Self| ::core::result::Result::Ok(x)
+                        }
+                    );
 
                     let cmd = stream.peek().ok_or($crate::Error::OutOfData);
                     $($crate::__if_else!(if ($(~ $($cmd_default)?)?) {
                         if cmd.is_err() {
                             $crate::__if_else!(
                                 if {$(
-                                    let cmd = <$( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )*
-                                            as $crate::Parsable>::parse_from(stream)?;
-                                    return ::core::result::Result::Ok((Self::$cmd(cmd), args));
+                                    let cmd = <$cmd_inner as $crate::Parsable>::parse_from(stream)?;
+                                    return ret(Self::$cmd(cmd));
                                 )?}
-                                else { return ::core::result::Result::Ok((Self::$cmd, args)); }
+                                else { return ret(Self::$cmd); }
                             );
                         }
                     });)*
 
-                    cmd?;
-                    let cmd = stream.next().unwrap();
-                    let cmd = cmd.as_ref();
+                    let cmd = cmd?.as_ref();
 
                     $(
                         let target = $crate::__if_else!(if {
                             $( $cmd_rename )?
                         } else { $crate::__kebab!($cmd) });
                         if cmd == target {
+                            stream.next();
                             $crate::__if_else!(
                                 if {$(
-                                    let cmd = <
-                                        $( :: $($cmd_abs_path)? )? $cmd_inner $( :: $cmd_path )*
-                                            as $crate::Parsable
-                                        >::parse_from(stream)?;
-                                    return ::core::result::Result::Ok((Self::$cmd(cmd), args));
-                                )?} else { return ::core::result::Result::Ok((Self::$cmd, args)); }
+                                    let cmd = <$cmd_inner as $crate::Parsable>::parse_from(stream)?;
+                                    return ret(Self::$cmd(cmd));
+                                )?} else { return ret(Self::$cmd); }
                             );
                         }
                     )*
 
-                    ::core::result::Result::Err(
-                        $crate::Error::UnrecognizedCommand(cmd.into())
-                    )
+                    #[allow(unreachable_code)]
+                    {
+                        $({$crate::__if_else!(if ($(~ $($cmd_default)?)?) {
+                            $crate::__if_else!(
+                                if {$(
+                                    let cmd = <$cmd_inner as $crate::Parsable>::parse_from(stream)?;
+                                        // .ok_or_else(|| $crate::Error::InvalidDefault(stringify!($cmd)))?;
+                                    return ret(Self::$cmd(cmd));
+                                )?}
+                                else { return ret(Self::$cmd); }
+                            );
+                        });})*
+
+                        return ::core::result::Result::Err(
+                            $crate::Error::UnrecognizedCommand(cmd.into())
+                        );
+                    }
                 }
             }
         )?
@@ -193,6 +204,15 @@ macro_rules! ltnt {
                         let mut $arg = ::core::option::Option::<$arg_ty>::None;
                     )*
 
+                    fn missing_value(s: impl ::core::convert::Into<::std::string::String>)
+                        -> impl ::core::ops::FnOnce($crate::Error) -> $crate::Error
+                    {
+                        move |e| match e {
+                            $crate::Error::OutOfData => $crate::Error::MissingValue(s.into()),
+                            e => e,
+                        }
+                    }
+
                     while let ::core::option::Option::Some(arg)
                         = stream.peek().map(|s| s.as_ref().trim())
                     {
@@ -207,24 +227,24 @@ macro_rules! ltnt {
                                     $( $arg_rename )?
                                 } else { $crate::__kebab!($arg) });
                                 if long == target {
-                                    let default = <$arg_ty as $crate::Value>::default();
+                                    let default = <$arg_ty as $crate::Parsable>::default();
                                     let val = if val.is_empty() && default.is_none() {
-                                        let val = stream.next().unwrap();
                                         ::core::option::Option::Some(
-                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                            <$arg_ty as $crate::Parsable>::parse_from(stream)
+                                                .map_err(missing_value(long))?
                                         )
                                     } else if !val.is_empty() {
                                         ::core::option::Option::Some(
-                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                            <$arg_ty as $crate::Parsable>::parse_from(
+                                                &mut ::core::iter::once(val).peekable()
+                                            )?
                                         )
                                     } else if !default.is_none() {
                                         default
                                     } else {
-                                        let val = stream.next()
-                                            .ok_or_else(|| $crate::Error::MissingValue(long.to_string()))?;
-
                                         ::core::option::Option::Some(
-                                            <$arg_ty as $crate::Value>::parse(val.as_ref())?
+                                            <$arg_ty as $crate::Parsable>::parse_from(stream)
+                                                .map_err(missing_value(long))?
                                         )
                                     }.ok_or_else(|| $crate::Error::MissingValue(long.to_string()))?;
 
@@ -251,7 +271,7 @@ macro_rules! ltnt {
                                         // only the final arg in a short chain is allowed to
                                         // consume a following value, the rest must rely on
                                         // defaults
-                                        let val = <$arg_ty as $crate::Value>::default()
+                                        let val = <$arg_ty as $crate::Parsable>::default()
                                             .ok_or_else(|| $crate::Error::MissingValue(ch.to_string()))?;
 
                                         $arg = ::core::option::Option::Some(val);
@@ -267,13 +287,11 @@ macro_rules! ltnt {
 
                             $($(
                                 if last == $arg_short {
-                                    let val = <$arg_ty as $crate::Value>::default()
+                                    let val = <$arg_ty as $crate::Parsable>::default()
                                         .map(::core::result::Result::Ok)
                                         .unwrap_or_else(|| {
-                                            let val = stream.next()
-                                                .ok_or_else(|| $crate::Error::MissingValue(last.to_string()))?;
-                                            
-                                            <$arg_ty as $crate::Value>::parse(val.as_ref())
+                                            <$arg_ty as $crate::Parsable>::parse_from(stream)
+                                                .map_err(missing_value(short))
                                         })?;
 
                                     $arg = ::core::option::Option::Some(val);
