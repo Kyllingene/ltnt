@@ -37,12 +37,17 @@ pub fn executable() -> String {
 /// If you're just trying to parse CLI arguments, see
 /// [`parse`](Parsable::parse).
 ///
+/// Generally, these fall into three categories:
+///  - "Command-style" (e.g. `attach-session` in `tmux attach-session`.)
+///  - "Argument-style", a set of arguments (e.g. `--help`, `-h`, `-al`)
+///  - "Value-style", a value used by another `Parsable` (e.g. `1.23`, `"foo"`)
+///
 /// ```sh
 /// manager dev --kinds keyboard,monitor
-/// #       \_/ A "command-style" Parsable
+/// #       \_/                          A "command-style" Parsable
 /// #           \______________________/ An "argument-style" Parsable with..
-///                     \______________/ a "value-style" Parsable, composed of..
-///                     \______/ \_____/ two other "value-style" Parsables
+/// #                   \______________/ a "value-style" Parsable, composed of..
+/// #                   \______/ \_____/ two other "value-style" Parsables
 /// ```
 pub trait Parsable: Sized {
     /// The basic output of parsing this type.
@@ -53,7 +58,8 @@ pub trait Parsable: Sized {
 
     /// The result when this type is parsed as the root of an invocation.
     ///
-    /// Should usually be `(Self::Output, T)`, or similar.
+    /// Should usually be `(Self::Output, T)`, `(Self::Output, MyArguments, T)`,
+    /// or something similar.
     type FullOutput<T>;
 
     /// Transform the result of [`parse_from`] into the result of [`parse_all`].
@@ -96,23 +102,6 @@ pub trait Parsable: Sized {
         Self::parse_all(std::env::args())
     }
 }
-
-/*impl Parsable for () {
-    type Output = ();
-    type FullOutput<T> = T;
-
-    fn make_full_output<T>((): (), rest: T) -> Self::FullOutput<T> {
-        rest
-    }
-
-    fn parse_from<S>(_: &mut Peekable<S>) -> Result<()>
-    where
-        S: Iterator,
-        S::Item: AsRef<str> + Into<String>,
-    {
-        Ok(())
-    }
-}*/
 
 impl<T> Parsable for Box<T>
 where
