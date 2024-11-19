@@ -1,13 +1,15 @@
-#![doc = include_str!("../README.md")]
-
+//! A simple, efficient, and flexible arg parsing library.
+//!
+//! Most users will simply want [`ltnt!`] and [`Parsable::parse`]; for advanced
+//! usage, see [`Parsable`] and [`Error`].
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 
 extern crate alloc;
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::boxed::Box;
 
 mod error;
 mod macros;
@@ -24,12 +26,15 @@ pub type Result<T> = core::result::Result<T, Error>;
 /// Returns the path to the current executable.
 ///
 /// Note that this just returns the first argument, which is the executable path
-/// only by convention.
+/// only by convention. There's no strict guarantee that this function will
+/// return the correct path, or any path at all.
 ///
 /// Only available on feature `std`.
 #[cfg(feature = "std")]
 pub fn executable() -> String {
-    std::env::args().next().expect("first argument should always be the executable path")
+    std::env::args()
+        .next()
+        .expect("first argument should always be the executable path")
 }
 
 /// Anything that can be parsed from a stream of arguments.
@@ -88,11 +93,14 @@ pub trait Parsable: Sized {
     fn parse_all<A>(args: A) -> Result<Self::FullOutput<Vec<String>>>
     where
         A: IntoIterator,
-        A::Item: AsRef<str> + Into<String>
+        A::Item: AsRef<str> + Into<String>,
     {
         let mut args = args.into_iter().skip(1).peekable();
         let out = Self::parse_from(&mut args)?;
-        Ok(Self::make_full_output(out, args.map(|s| s.into()).collect()))
+        Ok(Self::make_full_output(
+            out,
+            args.map(|s| s.into()).collect(),
+        ))
     }
 
     /// Parse all the command-line arguments with this as the root.
@@ -141,7 +149,7 @@ mod value {
     #[cfg(feature = "std")]
     use std::ffi::OsString;
 
-    use crate::{Parsable, Peekable, Result, Error};
+    use crate::{Error, Parsable, Peekable, Result};
 
     macro_rules! impl_for {
         ($($t:ident $(<$gen:ident $(: $bound:ident $([$($gen_bound:tt)*])?)?>)?),*) => {$(

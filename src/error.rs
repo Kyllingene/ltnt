@@ -1,7 +1,7 @@
-use core::fmt;
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
-use alloc::boxed::Box;
+use core::fmt;
 
 /// A marker trait for items implementing `Debug` and `Display`.
 ///
@@ -11,7 +11,10 @@ impl<T: fmt::Debug + fmt::Display> DebugDisplay for T {}
 
 /// An error that occured during parsing.
 // `expect(missing_docs)` misbehaves, but only in `cfg(test)`
-#[cfg_attr(not(test), expect(missing_docs, reason = "most variants are self-explanatory"))]
+#[cfg_attr(
+    not(test),
+    expect(missing_docs, reason = "most variants are self-explanatory")
+)]
 #[derive(Debug)]
 pub enum Error {
     InvalidSignedInteger(String),
