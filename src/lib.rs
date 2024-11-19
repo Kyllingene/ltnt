@@ -1,4 +1,7 @@
+//! TODO
+
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 
 extern crate alloc;
 
@@ -15,19 +18,45 @@ pub use const_format::{map_ascii_case as __map_ascii_case, Case as __Case};
 pub use core::iter::Peekable;
 pub use error::Error;
 
+/// The result of a parsing operation.
 pub type Result<T> = core::result::Result<T, Error>;
 
+/// Returns the path to the current executable.
+///
+/// Note that this just returns the first argument, which is the executable path
+/// only by convention.
+///
+/// Only available on feature `std`.
 #[cfg(feature = "std")]
 pub fn executable() -> String {
     std::env::args().next().expect("first argument should always be the executable path")
 }
 
+/// Anything that can be parsed from a stream of arguments.
+///
+/// If you're just trying to parse CLI arguments, see
+/// [`parse`](Parsable::parse).
+///
+/// ```sh
+/// manager dev --kinds keyboard,monitor
+/// #       \_/ A "command-style" Parsable
+/// #           \______________________/ An "argument-style" Parsable with..
+///                     \______________/ a "value-style" Parsable, composed of..
+///                     \______/ \_____/ two other "value-style" Parsables
+/// ```
 pub trait Parsable: Sized {
+    /// The basic output of parsing this type.
+    ///
+    /// Usually used to pair arguments with the output, e.g.
+    /// `type Output = (Self, SelfArgs);`.
     type Output;
 
-    /// The result when this type is parsed as the root.
+    /// The result when this type is parsed as the root of an invocation.
+    ///
+    /// Should usually be `(Self::Output, T)`, or similar.
     type FullOutput<T>;
 
+    /// Transform the result of [`parse_from`] into the result of [`parse_all`].
     fn make_full_output<T>(output: Self::Output, rest: T) -> Self::FullOutput<T>;
 
     /// The default value. What this means is dependent on how/when this is
@@ -38,11 +67,17 @@ pub trait Parsable: Sized {
         None
     }
 
+    /// Parse this item from a stream.
+    ///
+    /// Note that this *must not* consume values it doesn't use.
     fn parse_from<S>(stream: &mut Peekable<S>) -> Result<Self::Output>
     where
         S: Iterator,
         S::Item: AsRef<str> + Into<String>;
 
+    /// Parse this item as the root of an invocation.
+    ///
+    /// Returns any leftovers (i.e. arguments that weren't consumed).
     fn parse_all<A>(args: A) -> Result<Self::FullOutput<Vec<String>>>
     where
         A: IntoIterator,
@@ -53,6 +88,9 @@ pub trait Parsable: Sized {
         Ok(Self::make_full_output(out, args.map(|s| s.into()).collect()))
     }
 
+    /// Parse all the command-line arguments with this as the root.
+    ///
+    /// Returns any leftovers (i.e. arguments that weren't consumed).
     #[cfg(feature = "std")]
     fn parse() -> Result<Self::FullOutput<Vec<String>>> {
         Self::parse_all(std::env::args())

@@ -11,7 +11,7 @@
 ///         Ls = Ls,
 ///
 ///         // Nested command called with `dev` (*not* `info`)
-///         Info = Ls as "dev",
+///         Info = Info as "dev",
 ///     };
 ///
 ///     // A set of arguments being used as the arguments for 'Manager' (but can be used anywhere)
@@ -43,6 +43,8 @@
 /// is called `manager`:
 ///
 /// ```sh
+/// # Both print help text
+/// manager
 /// manager help
 ///
 /// # When supplying values, long-form arguments can optionally use an '=',
@@ -50,7 +52,7 @@
 /// manager ls --filter="foo"
 /// manager ls -f "bar"
 ///
-/// # Arguments come exclusively after the command they modify, i.e.
+/// # Arguments come exclusively after the command they modify, e.g.
 /// # `manager dev --verbose` is invalid
 /// manager --verbose dev --kinds keyboard,monitor
 /// ```
@@ -263,7 +265,8 @@ macro_rules! ltnt {
 
 
                             let mut chars = short.chars();
-                            let last = chars.next_back().ok_or($crate::Error::EmptyShortList)?;
+                            // let last = chars.next_back().ok_or($crate::Error::EmptyShortList)?;
+                            let Some(last) = chars.next_back() else { continue };
 
                             for ch in chars {
                                 $($(
