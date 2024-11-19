@@ -3,6 +3,10 @@ name = "ltnt"
 version = "1.0.0"
 edition = "2021"
 
+license = "MIT"
+authors = ["Kyllingene"]
+repository = "https://git.sr.ht/~kyllingene/ltnt"
+
 [dependencies]
 const_format = "0.2.33"
 
