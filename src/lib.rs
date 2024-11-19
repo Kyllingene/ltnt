@@ -62,7 +62,8 @@ pub trait Parsable: Sized {
     /// or something similar.
     type FullOutput<T>;
 
-    /// Transform the result of [`parse_from`] into the result of [`parse_all`].
+    /// Transform the result of [`parse_from`](Parsable::parse_from) into the
+    /// result of [`parse_all`](Parsable::parse_all).
     fn make_full_output<T>(output: Self::Output, rest: T) -> Self::FullOutput<T>;
 
     /// The default value. What this means is dependent on how/when this is
@@ -285,17 +286,15 @@ mod value {
 
 macro_rules! impl_tuples {
     () => {};
-    ($head:ident $($tail:ident)*) => {
-        impl_tuples!($($tail)*);
+    (@impl) => {};
 
-        impl<$head, $($tail,)*> Parsable for ($head, $($tail,)*)
+    (@impl $($i:ident)*) => {
+        impl<$($i,)*> Parsable for ($($i,)*)
         where
-            $head: Parsable,
-            $($tail: Parsable,)*
+            $($i: Parsable,)*
         {
             type Output = (
-                <$head as Parsable>::Output,
-                $(<$tail as Parsable>::Output,)*
+                $(<$i as Parsable>::Output,)*
             );
             type FullOutput<T2> = (Self::Output, T2);
 
@@ -305,8 +304,7 @@ macro_rules! impl_tuples {
 
             fn default() -> Option<Self> {
                 Some((
-                    <$head as Parsable>::default()?,
-                    $(<$tail as Parsable>::default()?,)*
+                    $(<$i as Parsable>::default()?,)*
                 ))
             }
 
@@ -316,12 +314,22 @@ macro_rules! impl_tuples {
                 S2::Item: AsRef<str> + Into<String>
             {
                 Ok((
-                    <$head as Parsable>::parse_from(stream)?,
-                    $(<$tail as Parsable>::parse_from(stream)?,)*
+                    $(<$i as Parsable>::parse_from(stream)?,)*
                 ))
             }
         }
     };
+
+    ($head:ident $($tail:ident)*) => {
+        impl_tuples!([$head] $($tail)*);
+    };
+
+    ([$($curr:ident)*]) => {
+        impl_tuples!(@impl $($curr)*);
+    };
+    ([$($curr:ident)*] $head:ident $($tail:ident)*) => {
+        impl_tuples!(@impl $($curr)*);
+        impl_tuples!([$($curr)* $head] $($tail)*);
+    };
 }
-// impl_tuples!(Z Y X W V U T S R Q P O N M L K J I H G F E D C B A);
 impl_tuples!(A B C D E F G H I J K L M N O P Q R S T U V W X Y Z);
