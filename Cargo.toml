@@ -3,6 +3,10 @@ name = "ltnt"
 version = "1.0.0"
 edition = "2021"
 
+description = "A simple, efficient, and flexible arg parsing library."
+keywords = ["argparse", "cli", "command-line"]
+categories = ["command-line-interface"]
+
 license = "MIT"
 authors = ["Kyllingene"]
 repository = "https://git.sr.ht/~kyllingene/ltnt"
