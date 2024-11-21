@@ -19,13 +19,14 @@ ltnt::ltnt!(
         // A required argument with a short form
         pub name('n'): String,
 
-        // An argument with a default value, that therefore doesn't need to be passed
-        pub verbose: bool = false,
+        // An argument with a built-in default value (`false`), that therefore doesn't need to be passed
+        pub verbose: bool,
     };
 
     // A set of arguments that's being used in 'Manager' as a command
     struct Help {
-        pub courteous: bool,
+        // An argument with a given default value, that therefore doesn't need to be passed
+        pub courteous: bool = true,
     };
 
     // A set of arguments that's being used in 'Manager' as a command
@@ -126,6 +127,6 @@ fn main() {
     }
 
     for item in rest {
-        println!("we don't support or provide {item}");
+        println!("We don't support or provide {item}");
     }
 }
