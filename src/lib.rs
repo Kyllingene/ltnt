@@ -147,7 +147,7 @@ mod value {
     use alloc::vec::Vec;
 
     #[cfg(feature = "std")]
-    use std::ffi::OsString;
+    use std::{ffi::OsString, path::PathBuf};
 
     use crate::{Error, Parsable, Peekable, Result};
 
@@ -184,7 +184,7 @@ mod value {
     impl_for!(String, f32, f64, bool, CString, Vec<Q: Parsable[Output = Q]>);
 
     #[cfg(feature = "std")]
-    impl_for!(OsString);
+    impl_for!(OsString, PathBuf);
 
     trait Value: Sized {
         /// The default value used when the argument is given, but without a value.
@@ -210,6 +210,13 @@ mod value {
     impl Value for OsString {
         fn parse(data: &str) -> Result<Self> {
             Ok(OsString::from(data))
+        }
+    }
+
+    #[cfg(feature = "std")]
+    impl Value for PathBuf {
+        fn parse(data: &str) -> Result<Self> {
+            Ok(PathBuf::from(data))
         }
     }
 
