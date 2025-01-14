@@ -120,7 +120,7 @@ macro_rules! ltnt {
                 where
                     S: ::core::iter::Iterator,
                     S::Item: ::core::convert::AsRef<::core::primitive::str>
-                        + ::core::convert::Into<::std::string::String>,
+                        + ::core::convert::Into<::alloc::string::String>,
                 {
                     let ret = $crate::__if_else!(
                         if {$({
@@ -200,13 +200,13 @@ macro_rules! ltnt {
                 where
                     S: ::core::iter::Iterator,
                     S::Item: ::core::convert::AsRef<::core::primitive::str>
-                        + ::core::convert::Into<::std::string::String>,
+                        + ::core::convert::Into<::alloc::string::String>,
                 {
                     $(
                         let mut $arg = ::core::option::Option::<$arg_ty>::None;
                     )*
 
-                    fn missing_value(s: impl ::core::convert::Into<::std::string::String>)
+                    fn missing_value(s: impl ::core::convert::Into<::alloc::string::String>)
                         -> impl ::core::ops::FnOnce($crate::Error) -> $crate::Error
                     {
                         move |e| match e {
@@ -229,7 +229,15 @@ macro_rules! ltnt {
                                     $( $arg_rename )?
                                 } else { $crate::__kebab!($arg) });
                                 if long == target {
-                                    let default = <$arg_ty as $crate::Parsable>::default();
+                                    let default = $crate::__if_else!(
+                                        if ($( $arg_optional )?) {
+                                            ::core::option::Option::None::<$arg_ty>
+                                        } else {
+                                            <$arg_ty as $crate::Parsable>
+                                                ::default();
+                                        }
+                                    );
+
                                     let val = if val.is_empty() && default.is_none() {
                                         ::core::option::Option::Some(
                                             <$arg_ty as $crate::Parsable>::parse_from(stream)
