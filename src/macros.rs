@@ -120,7 +120,7 @@ macro_rules! ltnt {
                 where
                     S: ::core::iter::Iterator,
                     S::Item: ::core::convert::AsRef<::core::primitive::str>
-                        + ::core::convert::Into<::alloc::string::String>,
+                        + ::core::convert::Into<::std::string::String>,
                 {
                     let ret = $crate::__if_else!(
                         if {$({
@@ -200,13 +200,13 @@ macro_rules! ltnt {
                 where
                     S: ::core::iter::Iterator,
                     S::Item: ::core::convert::AsRef<::core::primitive::str>
-                        + ::core::convert::Into<::alloc::string::String>,
+                        + ::core::convert::Into<::std::string::String>,
                 {
                     $(
                         let mut $arg = ::core::option::Option::<$arg_ty>::None;
                     )*
 
-                    fn missing_value(s: impl ::core::convert::Into<::alloc::string::String>)
+                    fn missing_value(s: impl ::core::convert::Into<::std::string::String>)
                         -> impl ::core::ops::FnOnce($crate::Error) -> $crate::Error
                     {
                         move |e| match e {
