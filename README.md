@@ -57,3 +57,14 @@ I also don't plan to support arbitrary syntaxes, or a builder. The reason for
 the latter is because builders require some kind of enforced structure, which I
 don't want to force on users. One could, however, implement one on top of `ltnt`
 - that would be awesome!
+
+## Cloning
+
+This repository is maintained on [Github](https://github.com/kyllingene/ltnt),
+[sr.ht](https://git.sr.ht/~kyllingene/ltnt), and [Radicle](https://radicle.xyz)
+(at `rad:zApjuUkQCBKSUaU6gzJozKsJvvRs`).
+
+Note that issues, PRs, etc. cannot and will not be syncronized between all of
+these. If you do not wish to check each platform before publishing an issue/PR,
+that's okay; however, if it's redundant, I may close it and refer you to a
+pre-existing issue/PR.
