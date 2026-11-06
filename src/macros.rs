@@ -234,7 +234,7 @@ macro_rules! ltnt {
                                             ::core::option::Option::None::<$arg_ty>
                                         } else {
                                             <$arg_ty as $crate::Parsable>
-                                                ::default();
+                                                ::default()
                                         }
                                     );
 
